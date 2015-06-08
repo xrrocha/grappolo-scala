@@ -1,10 +1,6 @@
-import net.xrrocha.cluster._
-import net.xrrocha.util._
+import net.xrrocha.cluster.Grappolo._
 
-import TimeUtils._
-import Grappolo._
-
-import io.Source
+import scala.io.Source
 
 val scoringThreshold = .6
 val threshold = .7
@@ -29,9 +25,13 @@ def loadMatrix(filename: String) = {
 val elements = loadElements("data/surnames.txt", Int.MaxValue)
 val name2index = elements.indices.map(i => (elements(i), i)).toMap
 
-implicit val matrix = loadMatrix("matrix.dat")
+implicit val matrix = loadMatrix("other/data/matrix.dat")
 
 trait Show { def show: String }
+
+implicit def int2show(index: Int) = new Show {
+  def show = elements(index)
+}
 
 implicit def pairs2show(pairs: Iterable[(Int, Double)]) = new Show {
   def show = pairs.map { case(i, s) => (elements(i), s) }.mkString(", ")
@@ -83,6 +83,21 @@ def prune(seedScores: Seq[(Int, Score)]) = {
     .toSet
 }
 
+
+def intraSimilarity(members: Iterable[Int]) = {
+  val seq = members.toSeq
+  if (seq.isEmpty) 0d
+  else if (seq.length == 1) 1d
+  else {
+    val scores = for {
+      i <- seq.indices
+      j <- i + 1 until seq.length
+    } yield matrix(seq(i))(seq(j))
+    scores.sum / scores.length
+  }
+}
+
+
 def xprune(members: Iterable[Int]) = {
   Stream.iterate((members, intraSimilarity(members))) { case(members, similarity) =>
     println(members.show)
@@ -103,39 +118,21 @@ def findClosestSiblings(elementIndex: Int): Set[Int] = {
   }
 }
 
-def intraSimilarity(members: Iterable[Int]) = {
-  val seq = members.toSeq
-  if (seq.isEmpty) 0d
-  else if (seq.length == 1) 1d
-  else {
-    val scores = for {
-      i <- seq.indices
-      j <- i + 1 until seq.length
-    } yield matrix(seq(i))(seq(j))
-    scores.sum / scores.length
-  }
-}
-
-val usaquin = name2index("usaquin")
-val usaquen = name2index("usaquen")
-
-val element = usaquin
+val element = name2index("lina")
 
 val siblings = matrix(element).filter(_._2 >= threshold).keySet
 
-val seedCluster = siblings ++ siblings.flatMap(findClosestSiblings)
+val extendedSiblings = siblings.flatMap(matrix).filter(_._2 >= threshold).map(_._1)
 
-val seedSimilarities = computeSimilarities(seedCluster.toSeq)
+val seedCluster = extendedSiblings.filter { i =>
+    val scores = siblings.toSeq.map(s => matrix(s)(i))
+    scores.sum / scores.length > threshold
+  }
 
-val initialCluster = prune(seedSimilarities)
-
-val intermediateCluster = initialCluster.filter { elementIndex =>
+val intermediateCluster = seedCluster.filter { elementIndex =>
   val closeSiblings = findClosestSiblings(elementIndex).
     filter(cs => findClosestSiblings(cs).contains(elementIndex))
 
-  closeSiblings.isEmpty || initialCluster.intersect(closeSiblings).nonEmpty
+  closeSiblings.isEmpty || seedCluster.intersect(closeSiblings).nonEmpty
 }
-
-val cluster = prune(computeSimilarities(intermediateCluster.toSeq))
-cluster.show
 

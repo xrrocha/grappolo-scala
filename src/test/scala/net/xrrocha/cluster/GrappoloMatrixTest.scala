@@ -73,7 +73,7 @@ object GrappoloMatrixTest extends LazyLogging {
   logger.info(s"$count elements, clustering threshold $clusteringThreshold, scoring threshold $scoringThreshold")
   implicit val matrix = {
     val (matrix, matrixTime) = time {
-      loadMatrix("matrix.dat")
+      loadMatrix("other/data/matrix.dat")
       //Grappolo.buildMatrix(count, scoringThreshold) { (i, j) =>
       //  scorer.getDistance(elements(i), elements(j))
       //}
@@ -82,8 +82,8 @@ object GrappoloMatrixTest extends LazyLogging {
     matrix
   }
 
-  //val matrixOut = new PrintWriter(new FileWriter("matrix.dat"), true)
-  //val namesOut = new PrintWriter(new FileWriter("matrix-names.dat"), true)
+  //val matrixOut = new PrintWriter(new FileWriter("other/data/matrix.dat"), true)
+  //val namesOut = new PrintWriter(new FileWriter("other/data/matrix-names.dat"), true)
   //for {
   //  i <- matrix.keySet.toSeq.sorted
   //  v = matrix(i).toSeq.sortWith { (p1, p2) =>

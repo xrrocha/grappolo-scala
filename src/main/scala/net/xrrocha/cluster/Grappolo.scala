@@ -17,27 +17,25 @@ object Grappolo extends LazyLogging {
     def apply(element: Int, threshold: Score)(implicit matrix: Matrix) = {
       val members = {
 
+
         val siblings = matrix(element).filter(_._2 >= threshold).keySet
 
-        if (siblings.size == 1) siblings
-        else {
-          val seedCluster = siblings ++ siblings.flatMap(findClosestSiblings(_, threshold))
+        val extendedSiblings = siblings.flatMap(matrix).filter(_._2 >= threshold).map(_._1)
 
-          val seedSimilarities = computeSimilarities(seedCluster.toSeq)
-
-          val initialCluster = prune(seedSimilarities, threshold)
-
-          val intermediateCluster = initialCluster.filter { elementIndex =>
-            val closeSiblings = findClosestSiblings(elementIndex, threshold).
-              filter(cs => findClosestSiblings(cs, threshold).contains(elementIndex))
-
-            closeSiblings.isEmpty || initialCluster.intersect(closeSiblings).nonEmpty
-          }
-
-          val cluster = prune(computeSimilarities(intermediateCluster.toSeq), threshold)
-
-          cluster
+        val seedCluster = extendedSiblings.filter { i =>
+          val scores = siblings.toSeq.map(s => matrix(s)(i))
+          scores.sum / scores.length > threshold
         }
+
+        val cluster = seedCluster.filter { elementIndex =>
+          val closeSiblings = findClosestSiblings(elementIndex, threshold).
+            filter(cs => findClosestSiblings(cs, threshold).contains(elementIndex))
+
+          closeSiblings.isEmpty || seedCluster.intersect(closeSiblings).nonEmpty
+        }
+
+        if (cluster.isEmpty) Set(element)
+        else cluster
       }
 
       new Cluster(members.toSeq.sorted)

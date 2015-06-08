@@ -1,6 +1,6 @@
 package net.xrrocha.cluster
 
-import java.io.{FileWriter, OutputStreamWriter, PrintWriter}
+import java.io.{FileWriter, PrintWriter}
 
 import net.xrrocha.cluster.Grappolo.Cluster
 import net.xrrocha.test.BaseTest
@@ -11,7 +11,7 @@ class ClusterTest extends BaseTest {
   import GrappoloMatrixTest._
 
   test("Generates all clusters") {
-    val votesOut = new PrintWriter(new FileWriter("cluster-votes.dat"), true)
+    val votesOut = new PrintWriter(new FileWriter("other/data/cluster-votes.dat"), true)
     val (clusters, clusteringTime) = time {
       matrix.par
         .map { case (element, vector) =>
@@ -39,7 +39,7 @@ class ClusterTest extends BaseTest {
       }
     logger.info(s"Clustering time: ${sayTimeInMillis(clusteringTime)}")
 
-    val out = new PrintWriter(new FileWriter("cluster-candidates.dat"), true)
+    val out = new PrintWriter(new FileWriter("other/data/cluster-candidates.dat"), true)
     clusters.foreach { case (cluster, count) =>
       val fields = Seq(
         count,
