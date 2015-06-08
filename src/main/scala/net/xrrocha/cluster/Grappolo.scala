@@ -2,19 +2,98 @@ package net.xrrocha.cluster
 
 import com.typesafe.scalalogging.LazyLogging
 
+class Clusterer(size: Int, threshold: Double, matrix: Map[Int, Map[Int, Double]]) {
+  def cluster(): Seq[Seq[Int]] = {
+
+    val candidateClusters = for (element <- matrix.keys) yield {
+      val siblings = matrix(element).filter(_._2 >= threshold).keySet
+
+      val extendedSiblings = siblings.flatMap(matrix).filter(_._2 >= threshold).map(_._1)
+
+      val seedCluster = extendedSiblings.filter { i =>
+        val scores = siblings.toSeq.map(s => matrix(s)(i))
+        scores.sum / scores.length > threshold
+      }
+
+      def closestSiblings(elementIndex: Int): Set[Int] = {
+        val siblings = (matrix(elementIndex) - elementIndex).filter(_._2 >= threshold)
+        if (siblings.isEmpty) Set()
+        else {
+          val maxScore = siblings.values.max
+          siblings.filter(_._2 == maxScore).keySet
+        }
+      }
+
+      val cluster = seedCluster.filter { index =>
+        val closeSiblings = closestSiblings(index).filter(cs => closestSiblings(cs).contains(index))
+
+        closeSiblings.isEmpty || seedCluster.intersect(closeSiblings).nonEmpty
+      }
+
+      cluster.toSeq.sorted
+    }
+
+    def intraSimilarity(elements: Seq[Int]) = {
+      if (elements.isEmpty) 0d
+      else if (elements.length == 1) 1d
+      else {
+        val scores = for {
+          i <- elements.indices
+          j <- i + 1 until elements.length
+          score = matrix(elements(i))(elements(j))
+        } yield score
+        scores.sum / scores.length
+      }
+    }
+
+    val orderedCandidateClusters =
+      candidateClusters.
+        toSeq.
+        groupBy(p => p).
+        mapValues(v => v.length).
+        toSeq.
+        map(p => (p._2, intraSimilarity(p._1), p._1)).
+        sortWith { (c1, c2) =>
+          val (votes1, similarity1, elements1) = c1
+          val (votes2, similarity2, elements2) = c2
+          (votes2 < votes1) || {
+            (votes2 == votes1) &&
+              (similarity2 < similarity1) || {
+              (similarity2 == similarity1) && {
+                elements2.size < elements1.size
+              }
+            }
+          }
+        }.
+        map(_._3)
+
+    val allCandidates = orderedCandidateClusters ++ (0 until size).map(Seq(_))
+    val (clusters, _) = allCandidates.foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
+      val (clusters, clustered) = accum
+      val nextClustered = clustered ++ candidateCluster
+      if (!candidateCluster.exists(clustered.contains)) (clusters :+ candidateCluster, nextClustered)
+      else accum
+    }
+
+    clusters
+  }
+}
+
 object Grappolo extends LazyLogging {
-  type Score = Double
-  type Vector = Map[Int, Score]
-  type Matrix = Map[Int, Vector]
 
-  def cluster(size: Int, scoringThreshold: Score, clusteringThreshold: Score)(score: (Int, Int) => Score): Seq[Seq[Int]] = {
+  def cluster(size: Int, clusteringThreshold: Double, matrix: Map[Int, Map[Int, Double]]) = {
+    val clusterer = new Clusterer(size, clusteringThreshold, matrix)
+    clusterer.cluster()
+  }
+
+  def cluster(size: Int, scoringThreshold: Double, clusteringThreshold: Double)(score: (Int, Int) => Double): Seq[Seq[Int]] = {
     val matrix = buildMatrix(size, scoringThreshold)(score)
-
-    ???
+    val clusterer = new Clusterer(size, clusteringThreshold, matrix)
+    clusterer.cluster()
   }
 
   object Cluster {
-    def apply(element: Int, threshold: Score)(implicit matrix: Matrix) = {
+    def apply(element: Int, threshold: Double)(implicit matrix: Map[Int, Map[Int, Double]]) = {
       val members = {
 
 
@@ -41,7 +120,7 @@ object Grappolo extends LazyLogging {
       new Cluster(members.toSeq.sorted)
     }
 
-    def prune(seedScores: Seq[(Int, Score)], threshold: Score)(implicit matrix: Matrix) = {
+    def prune(seedScores: Seq[(Int, Double)], threshold: Double)(implicit matrix: Map[Int, Map[Int, Double]]) = {
       Stream.iterate(seedScores) { scores =>
         computeSimilarities(scores.tail.map(_._1))
       }
@@ -51,7 +130,7 @@ object Grappolo extends LazyLogging {
         .toSet
     }
 
-    def computeSimilarities(seq: Seq[Int])(implicit matrix: Matrix): Seq[(Int, Double)] = {
+    def computeSimilarities(seq: Seq[Int])(implicit matrix: Map[Int, Map[Int, Double]]): Seq[(Int, Double)] = {
       if (seq.isEmpty) Seq()
       else {
         val pairs = for {
@@ -69,7 +148,7 @@ object Grappolo extends LazyLogging {
       }
     }
 
-    def findClosestSiblings(elementIndex: Int, threshold: Double)(implicit matrix: Matrix): Set[Int] = {
+    def findClosestSiblings(elementIndex: Int, threshold: Double)(implicit matrix: Map[Int, Map[Int, Double]]): Set[Int] = {
       val siblings = (matrix(elementIndex) - elementIndex).filter(_._2 >= threshold)
       if (siblings.isEmpty) Set()
       else {
@@ -79,7 +158,7 @@ object Grappolo extends LazyLogging {
     }
   }
 
-  case class Cluster(members: Seq[Int])(implicit matrix: Matrix) {
+  case class Cluster(members: Seq[Int])(implicit matrix: Map[Int, Map[Int, Double]]) {
     lazy val (centroids, quality) =
       if (members.isEmpty) (Seq(), 0d)
       else if (members.length == 1) (members, 1d)
@@ -117,7 +196,7 @@ object Grappolo extends LazyLogging {
 
   }
 
-  def buildMatrix[A](size: Int, scoringThreshold: Score)(score: (Int, Int) => Score): Matrix = {
+  def buildMatrix[A](size: Int, scoringThreshold: Double)(score: (Int, Int) => Double): Map[Int, Map[Int, Double]] = {
     val baseScores = for {
       i <- 0 until size
       j <- i + 1 until size
