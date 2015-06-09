@@ -1,5 +1,3 @@
-import net.xrrocha.cluster.Grappolo._
-
 import scala.io.Source
 
 val scoringThreshold = .6
@@ -33,6 +31,10 @@ implicit def int2show(index: Int) = new Show {
   def show = elements(index)
 }
 
+implicit def intPair2show(pairs: Iterable[(Int, Int)]) = new Show {
+  def show = pairs.map { case(i, s) => (elements(i), s) }.mkString(", ")
+}
+
 implicit def pairs2show(pairs: Iterable[(Int, Double)]) = new Show {
   def show = pairs.map { case(i, s) => (elements(i), s) }.mkString(", ")
 }
@@ -45,10 +47,10 @@ implicit def string2int(name: String) = name2index(name)
 
 def vector(elementIndex: Int) = matrix(elementIndex).toSeq.sortBy(-_._2)
 
-def siblings(elementIndex: Int) = matrix(elementIndex).toSeq.filter(_._2 >= threshold).sortBy(-_._2)
+def neighbors(elementIndex: Int) = matrix(elementIndex).toSeq.filter(_._2 >= threshold).sortBy(-_._2)
 
-def extSiblings(elementIndex: Int) =
-  siblings(elementIndex).map(_._1).
+def extNeighbors(elementIndex: Int) =
+  neighbors(elementIndex).map(_._1).
     flatMap(matrix(_).filter(_._2 >= threshold).keySet).
     distinct.
     map(i => (i, matrix(elementIndex)(i))).
@@ -72,7 +74,7 @@ def computeSimilarities(seq: Seq[Int]): Seq[(Int, Double)] = {
   }
 }
 
-def prune(seedScores: Seq[(Int, Score)]) = {
+def prune(seedScores: Seq[(Int, Double)]) = {
   Stream.iterate(seedScores) { scores =>
     println(scores.show)
     computeSimilarities(scores.tail.map(_._1))
@@ -109,30 +111,48 @@ def xprune(members: Iterable[Int]) = {
     .toSet
 }
 
-def findClosestSiblings(elementIndex: Int): Set[Int] = {
-  val siblings = (matrix(elementIndex) - elementIndex).filter(_._2 >= threshold)
-  if (siblings.isEmpty) Set()
+def findClosestNeighbors(elementIndex: Int): Set[Int] = {
+  val neighbors = (matrix(elementIndex) - elementIndex).filter(_._2 >= threshold)
+  if (neighbors.isEmpty) Set()
   else {
-    val maxScore = siblings.values.max
-    siblings.filter(_._2 == maxScore).keySet
+    val maxScore = neighbors.values.max
+    neighbors.filter(_._2 == maxScore).keySet
   }
 }
 
-val element = name2index("lina")
+def extNeighbors(name: String) = {
 
-val siblings = matrix(element).filter(_._2 >= threshold).keySet
+  val element = name2index(name)
 
-val extendedSiblings = siblings.flatMap(matrix).filter(_._2 >= threshold).map(_._1)
+  val neighbors = matrix(element).filter(_._2 >= threshold).keySet
 
-val seedCluster = extendedSiblings.filter { i =>
-    val scores = siblings.toSeq.map(s => matrix(s)(i))
+  val extendedNeighbors = neighbors.flatMap(matrix).filter(_._2 >= threshold).map(_._1)
+
+  val seedCluster = extendedNeighbors.filter { i =>
+    val scores = neighbors.toSeq.map(s => matrix(s)(i))
     scores.sum / scores.length > threshold
   }
 
-val intermediateCluster = seedCluster.filter { elementIndex =>
-  val closeSiblings = findClosestSiblings(elementIndex).
-    filter(cs => findClosestSiblings(cs).contains(elementIndex))
+  val intermediateCluster = seedCluster.filter { elementIndex =>
+    val closeNeighbors = findClosestNeighbors(elementIndex).
+      filter(cs => findClosestNeighbors(cs).contains(elementIndex))
 
-  closeSiblings.isEmpty || seedCluster.intersect(closeSiblings).nonEmpty
+    closeNeighbors.isEmpty || seedCluster.intersect(closeNeighbors).nonEmpty
+  }
+
+  val occurrences =
+    neighbors.toSeq.
+      flatMap(matrix).
+      filter(_._2 >= threshold).
+      map(_._1).
+      groupBy(i => i).
+      mapValues(_.size).
+      toSeq.
+      sortBy(-_._2)
+
+  occurrences
 }
+
+extNeighbors("rodriguez")
+
 
