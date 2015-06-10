@@ -156,5 +156,15 @@ def extNeighbors(name: String) = {
 
 extNeighbors("forero")
 
+def topCluster(name: String) = {
+  val element = name2index(name)
+
+  val vector = matrix(element).toSeq.filter(s => s._2 < 1d && s._2 >= threshold)
+  if (vector.isEmpty) Seq(element)
+  else {
+    val maxScore = vector.map(_._2).max
+    element +: vector.filter(_._2 == maxScore).map(_._1)
+  }
+}
 
 
