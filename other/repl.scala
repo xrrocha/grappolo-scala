@@ -3,10 +3,11 @@ import scala.io.Source
 val scoringThreshold = .6
 val threshold = .7
 
-def loadElements(filename: String, count: Int) = Source.fromFile(filename).getLines().take(count).toSeq
+def loadElements(filename: String, count: Int) =
+  Source.fromFile(filename)(io.Codec.UTF8).getLines().take(count).toSeq
 
 def loadMatrix(filename: String) = {
-  Source.fromFile(filename).getLines().zipWithIndex.map { case(line, index) =>
+  Source.fromFile(filename)(io.Codec.UTF8).getLines().zipWithIndex.map { case(line, index) =>
     val inFields = line.split(",")
     val vector = inFields.
       map { field =>
@@ -153,6 +154,17 @@ def extNeighbors(name: String) = {
   occurrences
 }
 
-extNeighbors("rodriguez")
+extNeighbors("forero")
+
+def topCluster(name: String) = {
+  val element = name2index(name)
+
+  val vector = matrix(element).toSeq.filter(s => s._2 < 1d && s._2 >= threshold)
+  if (vector.isEmpty) Seq(element)
+  else {
+    val maxScore = vector.map(_._2).max
+    element +: vector.filter(_._2 == maxScore).map(_._1)
+  }
+}
 
 
