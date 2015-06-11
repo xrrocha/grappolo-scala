@@ -138,11 +138,13 @@ trait Grappolo extends LazyLogging {
     val (clusters, clustered) = clusterCandidates.foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
       val (clusters, clustered) = accum
 
-      if (candidateCluster.exists(clustered.contains)) {
-        accum
-      } else {
-        (clusters :+ candidateCluster, clustered ++ candidateCluster)
-      }
+      val nextClustered = clustered ++ candidateCluster
+
+      val nextClusters =
+        if (candidateCluster.exists(clustered.contains)) clusters
+        else clusters :+ candidateCluster
+
+      (nextClusters, nextClustered)
     }
 
     clusters
