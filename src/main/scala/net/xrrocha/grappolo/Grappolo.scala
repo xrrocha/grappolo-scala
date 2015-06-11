@@ -11,64 +11,18 @@ object Test extends App with Grappolo with LazyLogging {
   val matrix = Matrix(512, .6d)((i, j) => distance.getDistance(names(i), names(j)))//Matrix("other/data/matrix.dat")
 
   val clusters = agglomerate(matrix, .7d)
+  logger.info(s"clustered elements: ${clusters.map(_.length).sum}")
 
   clusters.sortBy(_.length).zipWithIndex.foreach { case(cluster, index) =>
     println(s"${index + 1}: ${cluster.map(names).sorted.mkString(", ")}")
   }
 
   def extractCluster(element: Int, matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Int] = {
-
-    def findClosestNeighbors(elementIndex: Int, minSimilarity: Double): Set[Int] = {
-      val neighbors = (matrix(elementIndex) - elementIndex).filter(_._2 >= minSimilarity)
-      if (neighbors.isEmpty) Set()
-      else {
-        val maxScore = neighbors.values.max
-        neighbors.filter(_._2 == maxScore).keySet
-      }
-    }
-
-    def scoresFor(seq: Seq[Int]): Seq[(Int, Double)] = {
-      if (seq.isEmpty) Seq()
-      else {
-        val pairs = for {
-          i <- seq.indices
-          j <- seq.indices
-          if i != j
-          score = matrix(seq(i))(seq(j))
-        } yield (seq(i), score)
-        pairs
-          .groupBy(_._1)
-          .mapValues(ps => ps.map(_._2).sum / ps.length)
-          .toSeq
-          .seq
-          .sortBy(_._2)
-      }
-    }
-
-    val neighbors = matrix(element).filter(_._2 >= threshold).keySet
-
-    if (neighbors.size == 1) neighbors.toSeq
-    else {
-      val seedCluster = neighbors.flatMap(matrix(_).filter(_._2 >= threshold).keySet)
-      val seedScores = scoresFor(seedCluster.toSeq)
-
-      val initialCluster = Stream.iterate(seedScores) { scores =>
-        scoresFor(scores.tail.map(_._1))
-      }
-        .dropWhile(p => p.head._2 < threshold)
-        .head
-        .map(_._1)
-        .toSet
-
-      // TODO Re-prune cluster after removing members whose most similar neighbors are not in cluster
-      val cluster = initialCluster.filter { elementIndex =>
-        val closeNeighbors = findClosestNeighbors(elementIndex, threshold).
-          filter(cs => findClosestNeighbors(cs, threshold).contains(elementIndex))
-
-        closeNeighbors.isEmpty || initialCluster.intersect(closeNeighbors).nonEmpty
-      }
-
-      cluster.toSeq
+    val vector = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
+    if (vector.isEmpty) Seq(element)
+    else element +: {
+      val maxScore = vector.values.max
+      vector.filter(_._2 == maxScore).keys.toSeq
     }
   }
 
