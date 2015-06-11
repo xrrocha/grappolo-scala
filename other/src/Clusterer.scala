@@ -1,6 +1,9 @@
 package net.xrrocha.cluster
 
+import java.io.FileOutputStream
+
 import com.typesafe.scalalogging.LazyLogging
+import net.xrrocha.grappolo.Matrix
 import org.slf4j.LoggerFactory
 ;
 

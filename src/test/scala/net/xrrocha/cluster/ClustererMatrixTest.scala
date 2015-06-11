@@ -9,8 +9,8 @@ import org.apache.lucene.search.spell.LevensteinDistance
 
 import scala.io.Source
 
-class GrappoloMatrixTest extends BaseTest {
-  import GrappoloMatrixTest._
+class ClustererMatrixTest extends BaseTest {
+  import ClustererMatrixTest._
 
   test("All element indexes are present") {
     assert(elements.indices.forall(matrix.contains))
@@ -44,7 +44,7 @@ class GrappoloMatrixTest extends BaseTest {
   }
 }
 
-object GrappoloMatrixTest extends LazyLogging {
+object ClustererMatrixTest extends LazyLogging {
   import BaseTest._
 
   def loadMatrix(filename: String) = {

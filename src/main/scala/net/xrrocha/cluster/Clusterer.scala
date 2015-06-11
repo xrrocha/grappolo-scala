@@ -79,7 +79,7 @@ class Clusterer(size: Int, threshold: Double, matrix: Map[Int, Map[Int, Double]]
   }
 }
 
-object Grappolo extends LazyLogging {
+object Clusterer extends LazyLogging {
 
   def cluster(size: Int, clusteringThreshold: Double, matrix: Map[Int, Map[Int, Double]]) = {
     val clusterer = new Clusterer(size, clusteringThreshold, matrix)
