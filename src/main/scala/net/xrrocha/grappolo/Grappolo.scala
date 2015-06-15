@@ -8,13 +8,16 @@ import scala.io.Source
 object Test extends App with Grappolo with LazyLogging {
   val names = Source.fromFile("data/surnames.txt").getLines().toSeq
   val distance = new LevensteinDistance
-  val matrix = Matrix(512, .6d)((i, j) => distance.getDistance(names(i), names(j)))//Matrix("other/data/matrix.dat")
+
+  val matrix = Matrix("other/data/matrix.dat")
+  //val matrix = Matrix(1000, .6d)((i, j) => distance.getDistance(names(i), names(j)))
 
   val clusters = agglomerate(matrix, .7d)
   logger.info(s"clustered elements: ${clusters.map(_.length).sum}")
+  assert(clusters.map(_.length).sum == matrix.size)
 
   clusters.sortBy(_.length).zipWithIndex.foreach { case(cluster, index) =>
-    println(s"${index + 1}: ${cluster.map(names).sorted.mkString(", ")}")
+    logger.debug(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
   }
 
   def extractCluster(element: Int, matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Int] = {
@@ -55,8 +58,10 @@ trait Grappolo extends LazyLogging {
   def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean
 
   def agglomerate(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
+    logger.info("Ora jue")
     Stream.iterate((cluster(matrix, threshold), false)) { case (clusters, done) =>
-      logger.info(s"Iterating ${clusters.length} clusters")
+      logger.info(s"Agglomerating ${clusters.length} clusters")
+
       val newMatrix = Matrix(clusters.length, threshold) { (l, r) =>
         val scores = for {
           i <- clusters(l)
@@ -80,26 +85,30 @@ trait Grappolo extends LazyLogging {
   def cluster(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
     val elements = matrix.keySet.toSeq
 
-    val clusterCandidates = elements.
-      map(extractCluster(_, matrix, threshold).sorted).
+    def getCluster(element: Int) = {
+      val cluster = extractCluster(element, matrix, threshold)
+      assert(cluster.nonEmpty, s"Cluster empty for element $element")
+      cluster
+    }
+
+    val candidateClusters = elements.
+      map(getCluster(_).sorted).
       groupBy(c => c).
       mapValues(_.length).
       toSeq.
       map { case(cluster, occurrences) => (cluster, occurrences, clusterQuality(cluster, matrix)) }.
       sortWith(clusterOrdering).
-      map(_._1) ++ elements.map(Seq(_))
+      map(_._1)
+    logger.debug(s"${candidateClusters.length} candidateClusters")
 
-    val (clusters, clustered) = clusterCandidates.foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
-      val (clusters, clustered) = accum
+    val (clusters, clustered) = (candidateClusters  ++ elements.map(Seq(_)))
+      .foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
+        val (clusters, clustered) = accum
 
-      val nextClustered = clustered ++ candidateCluster
-
-      val nextClusters =
-        if (candidateCluster.exists(clustered.contains)) clusters
-        else clusters :+ candidateCluster
-
-      (nextClusters, nextClustered)
-    }
+        if (candidateCluster.exists(clustered.contains)) (clusters, clustered)
+        else (clusters :+ candidateCluster, clustered ++ candidateCluster)
+      }
+    logger.debug(s"${clusters.length} clusters")
 
     clusters
   }
