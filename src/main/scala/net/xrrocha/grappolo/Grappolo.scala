@@ -61,8 +61,25 @@ trait Grappolo extends LazyLogging {
   def clusterQuality(cluster: Seq[Int], matrix: Map[Int, Map[Int, Double]]): Double
   def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean
 
+  def toMatrix(map: Map[Int, Map[Int, Double]]) =
+    map.mapValues(_.withDefaultValue(0d)).withDefaultValue(Map().withDefaultValue(0d))
+
   def agglomerate(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
-    Stream.iterate((cluster(matrix, threshold), false)) { case (clusters, done) =>
+
+    def clusterSplit(matrix: Map[Int, Map[Int, Double]]) = {
+      val (singletonMatrix, reducedMatrix) = matrix.
+        mapValues(_.filter(_._2 >= threshold)).
+        partition(_._2.size == 1)
+      logger.info(s"${singletonMatrix.size} singletons, ${reducedMatrix.size} other elements")
+
+      val singletons = singletonMatrix.keys.toSeq.map(Seq(_))
+      val clusters = cluster(toMatrix(reducedMatrix), threshold)
+      logger.info(s"${clusters.length} clusters, ${clusters.map(_.length).sum} elements")
+
+      (singletons, clusters)
+    }
+
+    Stream.iterate(clusterSplit(matrix)) { case (singletons, clusters) =>
       logger.info(s"Agglomerating ${clusters.length} clusters")
 
       val newMatrix = Matrix(clusters.length, threshold) { (l, r) =>
@@ -74,13 +91,13 @@ trait Grappolo extends LazyLogging {
         scores.sum / scores.length
       }
 
-      val newClusters = cluster(newMatrix, threshold)
+      val (nextSingletons, nextClusters) = clusterSplit(newMatrix)
 
-      val nextClusters = newClusters.map(_.flatMap(clusters))
+      def flatten(newClusters: Seq[Seq[Int]]) = newClusters.map(_.flatMap(clusters))
 
-      (nextClusters, nextClusters.length == clusters.length)
+      (singletons ++ flatten(nextSingletons), flatten(nextClusters))
     }.
-    dropWhile(!_._2).
+    dropWhile(_._2.nonEmpty).
     head.
     _1
   }
