@@ -21,21 +21,25 @@ object Test extends App with Grappolo with LazyLogging {
   }
 
   def extractCluster(element: Int, matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Int] = {
-    val vector = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
-    if (vector.isEmpty) Seq(element)
+    val neighbors = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
+    if (neighbors.isEmpty) Seq(element)
     else element +: {
-      val maxScore = vector.values.max
-      vector.filter(_._2 == maxScore).keys.toSeq
+      val maxScore = neighbors.values.max
+      neighbors.filter(_._2 == maxScore).keys.toSeq
     }
   }
 
   def clusterQuality(cluster: Seq[Int], matrix: Map[Int, Map[Int, Double]]): Double = {
-    val scores = for {
-      i <- cluster.indices
-      j <- i + 1 until cluster.length
-      score = matrix(i)(j)
-    } yield score
-    scores.sum / scores.length
+    assert(cluster.nonEmpty)
+    if (cluster.length == 1) 1d
+    else {
+      val scores = for {
+        i <- cluster.indices
+        j <- i + 1 until cluster.length
+        score = matrix(i)(j)
+      } yield score
+      scores.sum / scores.length
+    }
   }
 
   def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean = {
@@ -58,7 +62,6 @@ trait Grappolo extends LazyLogging {
   def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean
 
   def agglomerate(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
-    logger.info("Ora jue")
     Stream.iterate((cluster(matrix, threshold), false)) { case (clusters, done) =>
       logger.info(s"Agglomerating ${clusters.length} clusters")
 
@@ -99,7 +102,6 @@ trait Grappolo extends LazyLogging {
       map { case(cluster, occurrences) => (cluster, occurrences, clusterQuality(cluster, matrix)) }.
       sortWith(clusterOrdering).
       map(_._1)
-    logger.debug(s"${candidateClusters.length} candidateClusters")
 
     val (clusters, clustered) = (candidateClusters  ++ elements.map(Seq(_)))
       .foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
@@ -108,7 +110,6 @@ trait Grappolo extends LazyLogging {
         if (candidateCluster.exists(clustered.contains)) (clusters, clustered)
         else (clusters :+ candidateCluster, clustered ++ candidateCluster)
       }
-    logger.debug(s"${clusters.length} clusters")
 
     clusters
   }
