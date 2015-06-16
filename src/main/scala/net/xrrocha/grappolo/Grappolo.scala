@@ -67,16 +67,21 @@ trait Grappolo extends LazyLogging {
   def agglomerate(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
 
     def clusterSplit(matrix: Map[Int, Map[Int, Double]]) = {
-      val (singletonMatrix, reducedMatrix) = matrix.
+      val singletons = matrix.
         mapValues(_.filter(_._2 >= threshold)).
-        partition(_._2.size == 1)
-      logger.info(s"${singletonMatrix.size} singletons, ${reducedMatrix.size} other elements")
+        filter(_._2.size == 1).
+        keys.
+        toSeq
 
-      val singletons = singletonMatrix.keys.toSeq.map(Seq(_))
+      val reducedMatrix = (matrix -- singletons).
+        mapValues(m => (m -- singletons).withDefaultValue(0d)).
+        withDefaultValue(Map().withDefaultValue(0d))
+      logger.info(s"${singletons.size} singletons, ${reducedMatrix.size} other elements")
+
       val clusters = cluster(toMatrix(reducedMatrix), threshold)
       logger.info(s"${clusters.length} clusters, ${clusters.map(_.length).sum} elements")
 
-      (singletons, clusters)
+      (singletons.map(Seq(_)), clusters)
     }
 
     Stream.iterate(clusterSplit(matrix)) { case (singletons, clusters) =>
