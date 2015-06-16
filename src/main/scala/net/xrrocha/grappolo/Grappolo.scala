@@ -20,7 +20,7 @@ object Test extends App with Grappolo with LazyLogging {
     logger.debug(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
   }
 
-  def extractCluster(element: Int, matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Int] = {
+  def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int] = {
     val neighbors = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
     if (neighbors.isEmpty) Seq(element)
     else element +: {
@@ -29,7 +29,7 @@ object Test extends App with Grappolo with LazyLogging {
     }
   }
 
-  def clusterQuality(cluster: Seq[Int], matrix: Map[Int, Map[Int, Double]]): Double = {
+  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Double = {
     assert(cluster.nonEmpty)
     if (cluster.length == 1) 1d
     else {
@@ -57,14 +57,18 @@ object Test extends App with Grappolo with LazyLogging {
 }
 
 trait Grappolo extends LazyLogging {
-  def extractCluster(element: Int, matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Int]
-  def clusterQuality(cluster: Seq[Int], matrix: Map[Int, Map[Int, Double]]): Double
+  type Matrix = Map[Int, Map[Int, Double]]
+
+  def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int]
+  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Double
   def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean
 
-  def toMatrix(map: Map[Int, Map[Int, Double]]) =
-    map.mapValues(_.withDefaultValue(0d)).withDefaultValue(Map().withDefaultValue(0d))
+  def toMatrix(map: Matrix) =
+    map
+      .mapValues(_.withDefaultValue(0d))
+      .withDefaultValue(Map().withDefaultValue(0d))
 
-  def agglomerate(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
+  def agglomerate(matrix: Matrix, threshold: Double): Seq[Seq[Int]] = {
 
     def clusterSplit(matrix: Map[Int, Map[Int, Double]]) = {
       val singletons = matrix.
@@ -107,7 +111,7 @@ trait Grappolo extends LazyLogging {
     _1
   }
 
-  def cluster(matrix: Map[Int, Map[Int, Double]], threshold: Double): Seq[Seq[Int]] = {
+  def cluster(matrix: Matrix, threshold: Double): Seq[Seq[Int]] = {
     val elements = matrix.keySet.toSeq
 
     def getCluster(element: Int) = {
