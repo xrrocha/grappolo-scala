@@ -1,5 +1,7 @@
 package net.xrrocha.grappolo
 
+import java.io.{FileWriter, PrintWriter}
+
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.lucene.search.spell.LevensteinDistance
 
@@ -12,12 +14,16 @@ object Test extends App with Grappolo with LazyLogging {
   val matrix = Matrix("other/data/matrix.dat")
   //val matrix = Matrix(1000, .6d)((i, j) => distance.getDistance(names(i), names(j)))
 
-  val clusters = agglomerate(matrix, .7d)
-  logger.info(s"clustered elements: ${clusters.map(_.length).sum}")
-  assert(clusters.map(_.length).sum == matrix.size)
+  val scores = matrix.flatMap(_._2.values).toSet.toSeq.sorted
+  scores.foreach { score =>
+    val clusters = agglomerate(matrix, score)
+    logger.info(s"Clustered elements with score $score: ${clusters.map(_.length).sum}")
+    assert(clusters.map(_.length).sum == matrix.size)
 
-  clusters.sortBy(_.length).zipWithIndex.foreach { case(cluster, index) =>
-    logger.debug(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
+    val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score.dat"), true)
+    clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
+      out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
+    }
   }
 
   def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int] = {
