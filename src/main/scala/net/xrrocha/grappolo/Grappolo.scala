@@ -62,10 +62,15 @@ object Test extends App with Grappolo with LazyLogging {
   val names = Source.fromFile("data/surnames.txt").getLines().toSeq
   val distance = new LevensteinDistance
 
-  val matrix = Matrix("other/data/matrix.dat")
-  //val matrix = Matrix(1000, .6d)((i, j) => distance.getDistance(names(i), names(j)))
+  val count = 1000
+  val matrix =  Matrix("other/data/matrix.dat").
+    filterKeys(_ < count).
+    mapValues(_.filterKeys(_ < count).withDefaultValue(0d)).
+    withDefaultValue(Map().withDefaultValue(0d))
 
-  val scores = matrix.flatMap(_._2.values).toSet.toSeq.sorted
+  //val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
+
+  val scores = matrix.flatMap(_._2.values).toSet.toSeq.filter(_ < 1d).sorted
   scores.foreach { score =>
     val clusters = agglomerate(matrix, score)
     logger.info(s"Clustered elements with score $score: ${clusters.map(_.length).sum}")
