@@ -7,6 +7,57 @@ import org.apache.lucene.search.spell.LevensteinDistance
 
 import scala.io.Source
 
+
+case class Cluster(members: Seq[Int])(implicit matrix: Map[Int, Map[Int, Double]]) {
+  val (centroids, intraSimilarity) = {
+    val triplets = for {
+      i <- members
+      j <- members
+      score = matrix(i)(j)
+    } yield (i, j, score)
+    val similarities = triplets.groupBy(_._1).mapValues(vs => vs.map(_._3).sum / vs.length)
+
+    val maxSimilarity = similarities.values.max
+    val centroids = similarities.filter(_._2 == maxSimilarity).keys.toSeq
+
+    val intraSimilarity = similarities.values.sum / similarities.size
+
+    (centroids, intraSimilarity)
+  }
+
+  def similarityWith(cluster: Cluster) = {
+    val scores = for {
+      i <- members
+      j <- cluster.members
+      score = matrix(i)(j)
+    } yield score
+    scores.sum / scores.length
+  }
+}
+
+object Cluster {
+
+  def dunnIndex(clusters: Seq[Cluster]) = {
+    val minIntraSimilarity = Cluster.minIntraSimilarity(clusters)
+    val maxInterSimilarity = Cluster.maxInterSimilarity(clusters)
+    (1d - maxInterSimilarity) / (1d - minIntraSimilarity)
+  }
+
+  def maxInterSimilarity(clusters: Seq[Cluster]) = {
+    if (clusters.length == 1) 0d
+    else {
+      val scores = for {
+        i <- clusters.indices
+        j <- i + 1 until clusters.length
+        score = clusters(i).similarityWith(clusters(j))
+      } yield score
+      scores.max
+    }
+  }
+
+  def minIntraSimilarity(clusters: Seq[Cluster]) = clusters.map(_.intraSimilarity).min
+}
+
 object Test extends App with Grappolo with LazyLogging {
   val names = Source.fromFile("data/surnames.txt").getLines().toSeq
   val distance = new LevensteinDistance
@@ -20,7 +71,9 @@ object Test extends App with Grappolo with LazyLogging {
     logger.info(s"Clustered elements with score $score: ${clusters.map(_.length).sum}")
     assert(clusters.map(_.length).sum == matrix.size)
 
-    val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score.dat"), true)
+    val dunnIndex = Cluster.dunnIndex(clusters.map(Cluster(_)(matrix)))
+
+    val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score-$dunnIndex.dat"), true)
     clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
       out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
     }
