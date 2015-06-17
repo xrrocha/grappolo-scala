@@ -62,7 +62,7 @@ object Test extends App with Grappolo with LazyLogging {
   val names = Source.fromFile("data/surnames.txt").getLines().toSeq
   val distance = new LevensteinDistance
 
-  val count = 1000
+  val count = 10000
   val matrix =  Matrix("other/data/matrix.dat").
     filterKeys(_ < count).
     mapValues(_.filterKeys(_ < count).withDefaultValue(0d)).
@@ -70,18 +70,23 @@ object Test extends App with Grappolo with LazyLogging {
 
   //val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
 
-  val scores = matrix.flatMap(_._2.values).toSet.toSeq.filter(_ < 1d).sorted
-  scores.foreach { score =>
+  val scores = matrix.toSeq.flatMap(_._2.values).distinct.filter(s => s >= .675 && s <= .75).sorted
+  val (clusters, score, dunnIndex) = scores.foldLeft(Seq[Seq[Int]](), 0d, Double.MaxValue) { (accum, score) =>
+    val (_, _, minDunnIndex) = accum
+
+    logger.info(s"Clustering with score $score")
     val clusters = agglomerate(matrix, score)
-    logger.info(s"Clustered elements with score $score: ${clusters.map(_.length).sum}")
-    assert(clusters.map(_.length).sum == matrix.size)
-
     val dunnIndex = Cluster.dunnIndex(clusters.map(Cluster(_)(matrix)))
+    logger.info(s"${clusters.length} clusters with score $score and Dunn index $dunnIndex")
 
-    val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score-$dunnIndex.dat"), true)
-    clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
-      out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
-    }
+    if (dunnIndex < minDunnIndex) (clusters, score, dunnIndex)
+    else accum
+  }
+  logger.info(s"${clusters.length} best clusters selected with score $score and lowest Dunn index $dunnIndex")
+
+  val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score-$dunnIndex.dat"), true)
+  clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
+    out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
   }
 
   def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int] = {
