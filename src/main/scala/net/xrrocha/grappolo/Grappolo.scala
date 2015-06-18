@@ -7,14 +7,88 @@ import org.apache.lucene.search.spell.LevensteinDistance
 
 import scala.io.Source
 
+object Types {
+  type Similarity = Double
+  type Matrix = Map[Int, Map[Int, Similarity]]
+}
 
-case class Cluster(members: Seq[Int])(implicit matrix: Map[Int, Map[Int, Double]]) {
+import Types._
+
+object Test extends App with Grappolo with LazyLogging {
+  val names = Source.fromFile("data/surnames.txt").getLines().toSeq
+  val distance = new LevensteinDistance
+
+  val count = 10000
+  val matrix =  Matrix.load("other/data/matrix.dat").
+    filterKeys(_ < count).
+    mapValues(_.filterKeys(_ < count).withDefaultValue(0d)).
+    withDefaultValue(Map().withDefaultValue(0d))
+
+  //val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
+
+  val scores = matrix.toSeq.flatMap(_._2.values).distinct.filter(s => s >= .69 && s <= .72).sorted
+  val (clusters, similarity, dunnIndex) = scores.foldLeft(Seq[Seq[Int]](), 0d, Double.MaxValue) { (accum, similarity) =>
+    val (_, _, minDunnIndex) = accum
+
+    logger.info(s"Clustering with similarity $similarity")
+    val clusters = agglomerate(matrix, similarity)
+    val dunnIndex = Cluster.dunnIndex(clusters.map(Cluster(_)(matrix)))
+    logger.info(s"${clusters.length} clusters with similarity $similarity and Dunn index $dunnIndex")
+
+    if (dunnIndex < minDunnIndex) (clusters, similarity, dunnIndex)
+    else accum
+  }
+  logger.info(s"${clusters.length} best clusters selected with similarity $similarity and lowest Dunn index $dunnIndex")
+
+  val out = new PrintWriter(new FileWriter(s"other/data/clusters-$similarity-$dunnIndex.dat"), true)
+  clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
+    out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
+  }
+
+  def extractCluster(element: Int, matrix: Matrix, threshold: Similarity): Seq[Int] = {
+    val neighbors = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
+    if (neighbors.isEmpty) Seq(element)
+    else element +: {
+      val maxScore = neighbors.values.max
+      neighbors.filter(_._2 == maxScore).keys.toSeq
+    }
+  }
+
+  // TODO Replace with cluster's intra-similarity
+  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Similarity = {
+    assert(cluster.nonEmpty)
+    if (cluster.length == 1) 1d
+    else {
+      val scores = for {
+        i <- cluster.indices
+        j <- i + 1 until cluster.length
+        similarity = matrix(i)(j)
+      } yield similarity
+      scores.sum / scores.length
+    }
+  }
+
+  def clusterOrdering(left: (Seq[Int], Int, Similarity), right: (Seq[Int], Int, Similarity)): Boolean = {
+    val (cluster1, occurrences1, quality1) = left
+    val (cluster2, occurrences2, quality2) = right
+
+    occurrences2 < occurrences1 || {
+      occurrences2 == occurrences1 && {
+        quality2 < quality1 || {
+          quality2 == quality1 && cluster2.length < cluster1.length
+        }
+      }
+    }
+  }
+}
+
+case class Cluster(members: Seq[Int])(implicit matrix: Matrix) {
   val (centroids, intraSimilarity) = {
     val triplets = for {
       i <- members
       j <- members
-      score = matrix(i)(j)
-    } yield (i, j, score)
+      similarity = matrix(i)(j)
+    } yield (i, j, similarity)
     val similarities = triplets.groupBy(_._1).mapValues(vs => vs.map(_._3).sum / vs.length)
 
     val maxSimilarity = similarities.values.max
@@ -25,12 +99,12 @@ case class Cluster(members: Seq[Int])(implicit matrix: Map[Int, Map[Int, Double]
     (centroids, intraSimilarity)
   }
 
-  def similarityWith(cluster: Cluster) = {
+  def similarityWith(other: Cluster) = {
     val scores = for {
       i <- members
-      j <- cluster.members
-      score = matrix(i)(j)
-    } yield score
+      j <- other.members
+      similarity = matrix(i)(j)
+    } yield similarity
     scores.sum / scores.length
   }
 }
@@ -49,8 +123,8 @@ object Cluster {
       val scores = for {
         i <- clusters.indices
         j <- i + 1 until clusters.length
-        score = clusters(i).similarityWith(clusters(j))
-      } yield score
+        similarity = clusters(i).similarityWith(clusters(j))
+      } yield similarity
       scores.max
     }
   }
@@ -58,88 +132,21 @@ object Cluster {
   def minIntraSimilarity(clusters: Seq[Cluster]) = clusters.map(_.intraSimilarity).min
 }
 
-object Test extends App with Grappolo with LazyLogging {
-  val names = Source.fromFile("data/surnames.txt").getLines().toSeq
-  val distance = new LevensteinDistance
-
-  val count = 10000
-  val matrix =  Matrix("other/data/matrix.dat").
-    filterKeys(_ < count).
-    mapValues(_.filterKeys(_ < count).withDefaultValue(0d)).
-    withDefaultValue(Map().withDefaultValue(0d))
-
-  //val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
-
-  val scores = matrix.toSeq.flatMap(_._2.values).distinct.filter(s => s >= .675 && s <= .75).sorted
-  val (clusters, score, dunnIndex) = scores.foldLeft(Seq[Seq[Int]](), 0d, Double.MaxValue) { (accum, score) =>
-    val (_, _, minDunnIndex) = accum
-
-    logger.info(s"Clustering with score $score")
-    val clusters = agglomerate(matrix, score)
-    val dunnIndex = Cluster.dunnIndex(clusters.map(Cluster(_)(matrix)))
-    logger.info(s"${clusters.length} clusters with score $score and Dunn index $dunnIndex")
-
-    if (dunnIndex < minDunnIndex) (clusters, score, dunnIndex)
-    else accum
-  }
-  logger.info(s"${clusters.length} best clusters selected with score $score and lowest Dunn index $dunnIndex")
-
-  val out = new PrintWriter(new FileWriter(s"other/data/clusters-$score-$dunnIndex.dat"), true)
-  clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
-    out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
-  }
-
-  def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int] = {
-    val neighbors = matrix(element).filter(p => p._2 >= threshold && p._2 < 1d)
-    if (neighbors.isEmpty) Seq(element)
-    else element +: {
-      val maxScore = neighbors.values.max
-      neighbors.filter(_._2 == maxScore).keys.toSeq
-    }
-  }
-
-  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Double = {
-    assert(cluster.nonEmpty)
-    if (cluster.length == 1) 1d
-    else {
-      val scores = for {
-        i <- cluster.indices
-        j <- i + 1 until cluster.length
-        score = matrix(i)(j)
-      } yield score
-      scores.sum / scores.length
-    }
-  }
-
-  def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean = {
-    val (cluster1, occurrences1, quality1) = left
-    val (cluster2, occurrences2, quality2) = right
-
-    occurrences2 < occurrences1 || {
-      occurrences2 == occurrences1 && {
-        quality2 < quality1 || {
-          quality2 == quality1 && cluster2.length < cluster1.length
-        }
-      }
-    }
-  }
-}
-
 trait Grappolo extends LazyLogging {
-  type Matrix = Map[Int, Map[Int, Double]]
+  type Matrix = Map[Int, Map[Int, Similarity]]
 
-  def extractCluster(element: Int, matrix: Matrix, threshold: Double): Seq[Int]
-  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Double
-  def clusterOrdering(left: (Seq[Int], Int, Double), right: (Seq[Int], Int, Double)): Boolean
+  def extractCluster(element: Int, matrix: Matrix, threshold: Similarity): Seq[Int]
+  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Similarity
+  def clusterOrdering(left: (Seq[Int], Int, Similarity), right: (Seq[Int], Int, Similarity)): Boolean
 
   def toMatrix(map: Matrix) =
     map
       .mapValues(_.withDefaultValue(0d))
       .withDefaultValue(Map().withDefaultValue(0d))
 
-  def agglomerate(matrix: Matrix, threshold: Double): Seq[Seq[Int]] = {
+  def agglomerate(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
 
-    def clusterSplit(matrix: Map[Int, Map[Int, Double]]) = {
+    def clusterSplit(matrix: Map[Int, Map[Int, Similarity]]) = {
       val singletons = matrix.
         mapValues(_.filter(_._2 >= threshold)).
         filter(_._2.size == 1).
@@ -164,8 +171,8 @@ trait Grappolo extends LazyLogging {
         val scores = for {
           i <- clusters(l)
           j <- clusters(r)
-          score = matrix(i)(j)
-        } yield score
+          similarity = matrix(i)(j)
+        } yield similarity
         scores.sum / scores.length
       }
 
@@ -180,7 +187,7 @@ trait Grappolo extends LazyLogging {
     _1
   }
 
-  def cluster(matrix: Matrix, threshold: Double): Seq[Seq[Int]] = {
+  def cluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
     val elements = matrix.keySet.toSeq
 
     def getCluster(element: Int) = {
@@ -211,17 +218,30 @@ trait Grappolo extends LazyLogging {
 }
 
 object Matrix {
-  def apply(size: Int, threshold: Double)(scorer: (Int, Int) => Double): Map[Int, Map[Int, Double]] = {
+  def apply(size: Int, threshold: Similarity)(scorer: (Int, Int) => Similarity): Matrix = {
     val scores = for {
       i <- 0 until size
       j <- i + 1 until size
-      score = scorer(i, j)
-      if score >= threshold
-    } yield (i, j, score)
+      similarity = scorer(i, j)
+      if similarity >= threshold
+    } yield (i, j, similarity)
 
+    buildMatrix(size, scores)
+  }
+
+  def apply(size: Int, pairs: Iterable[(Int, Int)])(scorer: (Int, Int) => Similarity): Matrix = {
+    val scores = for {
+      (i, j) <- pairs
+      similarity = scorer(i, j)
+    } yield (i, j, similarity)
+
+    buildMatrix(size, scores)
+  }
+
+  def buildMatrix(size: Int, scores: Iterable[(Int, Int, Similarity)]) = {
     val allScores = scores ++ scores.map(t => (t._2, t._1, t._3)) ++ (0 until size).map(i => (i, i, 1d))
 
-    val emptyVector = Map[Int, Double]().withDefaultValue(0d)
+    val emptyVector = Map[Int, Similarity]().withDefaultValue(0d)
 
     allScores.
       groupBy(_._1).
@@ -229,7 +249,14 @@ object Matrix {
       withDefaultValue(emptyVector)
   }
 
-  def apply(filename: String): Map[Int, Map[Int, Double]] = {
+  def save(matrix: Matrix, filename: String): Unit = {
+    val out = new PrintWriter(new FileWriter(filename), true)
+    matrix.foreach { case(index, vector) =>
+      out.println(vector.toSeq.sortBy(_._1).map(p => s"${p._1}/${p._2}").mkString(","))
+    }
+  }
+
+  def load(filename: String): Matrix = {
     Source.fromFile(filename).
       getLines().
       zipWithIndex.
