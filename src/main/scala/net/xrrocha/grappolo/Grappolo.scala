@@ -229,10 +229,11 @@ object Matrix {
     buildMatrix(size, scores)
   }
 
-  def apply(size: Int, pairs: Iterable[(Int, Int)])(scorer: (Int, Int) => Similarity): Matrix = {
+  def apply(size: Int, pairs: Iterable[(Int, Int)], threshold: Similarity)(scorer: (Int, Int) => Similarity): Matrix = {
     val scores = for {
       (i, j) <- pairs
       similarity = scorer(i, j)
+      if similarity >= threshold
     } yield (i, j, similarity)
 
     buildMatrix(size, scores)
