@@ -3,7 +3,7 @@ package net.xrrocha.grappolo
 import java.io.{FileWriter, PrintWriter}
 
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.lucene.search.spell.LevensteinDistance
+import org.apache.lucene.search.spell._
 import org.scalatest.FunSuite
 
 import scala.io.Source
@@ -11,15 +11,15 @@ import scala.io.Source
 class GrappoloTest extends FunSuite {
   test("Clusters names") {
     val names = Seq(
-      "alejandro", "alejito", "alejo",
+      "alejandro", "aleajndro", "laejandro",
       "malrene", "marlen", "marlene", "marleny", "marleney",
       "marta", "martha",
       "ricardo")
 
-    val distance = new LevensteinDistance
+    val distance = new JaroWinklerDistance//LevensteinDistance
     val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
 
-    val (clusters, similarity, dunnIndex) =  Test.bestCluster(matrix, .65d, .75d)
+    val (clusters, similarity, dunnIndex) =  Test.bestCluster(matrix, .7d, .9d)
     println(s"${clusters.length} clusters at $similarity. Dunn index: $dunnIndex")
 
     clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
