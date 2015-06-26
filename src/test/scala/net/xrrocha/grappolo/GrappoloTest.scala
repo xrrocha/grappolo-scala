@@ -2,7 +2,6 @@ package net.xrrocha.grappolo
 
 import java.io.{FileWriter, PrintWriter}
 
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.lucene.search.spell._
 import org.scalatest.FunSuite
 
@@ -28,7 +27,7 @@ class GrappoloTest extends FunSuite {
   }
 }
 
-object Test extends Grappolo with LazyLogging {
+object Test extends Grappolo {
   import Types._
 
   def main(args: Array[String]): Unit = {
