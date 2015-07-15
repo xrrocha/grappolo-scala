@@ -77,7 +77,7 @@ trait Grappolo {
       .mapValues(_.withDefaultValue(0d))
       .withDefaultValue(Map().withDefaultValue(0d))
 
-  def agglomerate(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
+  def cluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
 
     def clusterSplit(matrix: Map[Int, Map[Int, Similarity]]) = {
       val singletons = matrix.
@@ -91,7 +91,7 @@ trait Grappolo {
         withDefaultValue(Map().withDefaultValue(0d))
       logger.debug(s"${singletons.size} singletons, ${reducedMatrix.size} other elements")
 
-      val clusters = cluster(toMatrix(reducedMatrix), threshold)
+      val clusters = doCluster(toMatrix(reducedMatrix), threshold)
       logger.debug(s"${clusters.length} clusters, ${clusters.map(_.length).sum} elements")
 
       (singletons.map(Seq(_)), clusters)
@@ -120,7 +120,7 @@ trait Grappolo {
     _1
   }
 
-  def cluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
+  def doCluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
     val elements = matrix.keySet.toSeq
 
     def getCluster(element: Int) = {

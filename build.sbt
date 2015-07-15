@@ -6,6 +6,7 @@ scalaVersion := "2.11.6"
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-log4j12" % "1.7.12",
+  "org.jfree" % "jfreechart" % "1.0.19" % "test",
   "org.scalatest" %% "scalatest" % "2.2.4" % "test",
   "org.apache.lucene" % "lucene-spellchecker" % "3.6.2" % "test"
 )

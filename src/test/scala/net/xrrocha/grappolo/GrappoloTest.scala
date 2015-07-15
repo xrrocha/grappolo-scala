@@ -54,7 +54,7 @@ object Test extends Grappolo {
       val (_, _, minDunnIndex) = accum
 
       logger.debug(s"Clustering with similarity $similarity")
-      val clusters = agglomerate(matrix, similarity)
+      val clusters = cluster(matrix, similarity)
       val dunnIndex = Cluster.dunnIndex(clusters.map(Cluster(_)(matrix)))
       logger.debug(s"${clusters.length} clusters with similarity $similarity and Dunn index $dunnIndex")
 
