@@ -18,7 +18,7 @@ class GrappoloTest extends FunSuite {
     val distance = new JaroWinklerDistance//LevensteinDistance
     val matrix = Matrix(names.length, .6d)((i, j) => distance.getDistance(names(i), names(j)))
 
-    val (clusters, similarity, dunnIndex) =  Test.bestCluster(matrix, .7d, .9d)
+    val (clusters, similarity, dunnIndex) =  GrappoloTest.bestCluster(matrix, .7d, .9d)
     println(s"${clusters.length} clusters at $similarity. Dunn index: $dunnIndex")
 
     clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
@@ -27,7 +27,7 @@ class GrappoloTest extends FunSuite {
   }
 }
 
-object Test extends Grappolo {
+object GrappoloTest extends Grappolo {
   import Types._
 
   def main(args: Array[String]): Unit = {

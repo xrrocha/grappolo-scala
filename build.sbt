@@ -2,13 +2,17 @@ name := "grappolo"
 
 version := "0.1"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 libraryDependencies ++= Seq(
-  "org.slf4j" % "slf4j-log4j12" % "1.7.12",
-  "org.jfree" % "jfreechart" % "1.0.19" % "test",
+  "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
+  "ch.qos.logback" % "logback-classic" % "1.1.3",
   "org.scalatest" %% "scalatest" % "2.2.4" % "test",
-  "org.apache.lucene" % "lucene-spellchecker" % "3.6.2" % "test"
+  "org.jfree" % "jfreechart" % "1.0.19" % "test",
+  "org.apache.lucene" % "lucene-spellchecker" % "3.6.2" % "test",
+  "com.lihaoyi" % "ammonite-repl" % "0.4.5" % "test" cross CrossVersion.full
 )
 
-crossScalaVersions := Seq("2.10.4", "2.11.6")
+crossScalaVersions := Seq("2.10.4", "2.11.7")
+
+initialCommands in (Test, console) := """ammonite.repl.Repl.run("")"""

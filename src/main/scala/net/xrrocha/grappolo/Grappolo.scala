@@ -2,6 +2,7 @@ package net.xrrocha.grappolo
 
 import java.io.{FileWriter, PrintWriter}
 
+import com.typesafe.scalalogging.StrictLogging
 import org.slf4j.LoggerFactory
 
 import scala.io.Source
@@ -63,8 +64,7 @@ object Cluster {
   def minIntraSimilarity(clusters: Seq[Cluster]) = clusters.map(_.intraSimilarity).min
 }
 
-trait Grappolo {
-  val logger = LoggerFactory.getLogger(getClass)
+trait Grappolo extends StrictLogging {
 
   type Matrix = Map[Int, Map[Int, Similarity]]
 
