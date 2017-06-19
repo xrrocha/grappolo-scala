@@ -3,19 +3,17 @@ package net.xrrocha.grappolo
 import java.io.{FileWriter, PrintWriter}
 
 import com.typesafe.scalalogging.StrictLogging
-
-import scala.io.Source
-
+import net.xrrocha.grappolo.Types._
 import org.apache.lucene.search.spell.LevensteinDistance
 
-import Types._
+import scala.io.Source
 
 object Test extends App with Grappolo with StrictLogging {
   val names = Source.fromFile("data/surnames.txt", "UTF-8").getLines().toSeq
   val distance = new LevensteinDistance
 
   val count = 10000
-  val matrix =  Matrix.load("other/data/matrix.dat").
+  val matrix = Matrix.load("other/data/matrix.dat").
     filterKeys(_ < count).
     mapValues(_.filterKeys(_ < count).withDefaultValue(0d)).
     withDefaultValue(Map().withDefaultValue(0d))
@@ -36,8 +34,8 @@ object Test extends App with Grappolo with StrictLogging {
   }
   logger.info(s"${clusters.length} best clusters selected with similarity $similarity and lowest Dunn index $dunnIndex")
 
-  val out = new PrintWriter(new FileWriter(s"other/data/clusters-$similarity-$dunnIndex.dat"), true)
-  clusters.sortBy(-_.length).zipWithIndex.foreach { case(cluster, index) =>
+  val out = new PrintWriter(new FileWriter(s"other/data/test-clusters-$similarity-$dunnIndex.dat"), true)
+  clusters.sortBy(-_.length).zipWithIndex.foreach { case (cluster, index) =>
     out.println(s"${index + 1}: ${cluster.length} - ${cluster.map(names).sorted.mkString(", ")}")
   }
 

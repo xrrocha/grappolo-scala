@@ -12,10 +12,13 @@ trait Plotter {
   val Urls = false
 
   def topTitle: String
+
   def xTitle: String
+
   def yTitle: String
 
   def width = 800
+
   def height = 800
 
 }
@@ -23,8 +26,6 @@ trait Plotter {
 case class XYSeriesConf(topTitle: String, xTitle: String, yTitle: String, width: Int = 500, height: Int = 500)
 
 trait XYSeriesPlotter extends Plotter {
-  def seriesTitle(vectors: Seq[Array[Double]]) = s"${vectors.length} vectors"
-
   def plot(filename: String, vectors: Seq[Array[Double]]): Unit = {
 
     val dataset = new XYSeriesCollection
@@ -46,24 +47,24 @@ trait XYSeriesPlotter extends Plotter {
     outputStream.flush()
     outputStream.close()
   }
+
+  def seriesTitle(vectors: Seq[Array[Double]]) = s"${vectors.length} vectors"
 }
 
 trait ClusterPlotter extends Plotter {
-  def clusterLabel(cluster: Seq[Int], index: Int) = s"Cluster #$index (${cluster.length})"
-
   def plot(filename: String, clusters: Seq[Seq[Int]], exclusions: Set[Int] = Set.empty)(extractData: Int => (Double, Double)): File = {
     val dataset = new XYSeriesCollection
     clusters.zipWithIndex.
       filterNot(p => exclusions.contains(p._2)).
       foreach { case (cluster, index) =>
-      val series = new XYSeries(clusterLabel(cluster, index))
-      dataset.addSeries(series)
+        val series = new XYSeries(clusterLabel(cluster, index))
+        dataset.addSeries(series)
 
-      cluster.foreach { member =>
-        val (x, y) = extractData(member)
-        series.add(x, y)
+        cluster.foreach { member =>
+          val (x, y) = extractData(member)
+          series.add(x, y)
+        }
       }
-    }
 
     val chart = ChartFactory.createScatterPlot(
       topTitle, xTitle, yTitle,
@@ -84,4 +85,6 @@ trait ClusterPlotter extends Plotter {
 
     outputFile
   }
+
+  def clusterLabel(cluster: Seq[Int], index: Int) = s"Cluster #$index (${cluster.length})"
 }

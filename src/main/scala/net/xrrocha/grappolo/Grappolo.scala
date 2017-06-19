@@ -3,18 +3,19 @@ package net.xrrocha.grappolo
 import java.io.{FileWriter, PrintWriter}
 
 import com.typesafe.scalalogging.StrictLogging
-import org.slf4j.LoggerFactory
 
 import scala.io.Source
 
 object Types {
+  type Index = Int
   type Similarity = Double
-  type Matrix = Map[Int, Map[Int, Similarity]]
+  type IndexScore = (Index, Similarity)
+  type Matrix = Map[Index, Map[Index, Similarity]]
 }
 
 import net.xrrocha.grappolo.Types._
 
-case class Cluster(members: Seq[Int])(implicit matrix: Matrix) {
+case class Cluster(members: Seq[Index])(implicit matrix: Matrix) {
   val (centroids, intraSimilarity) = {
     val triplets = for {
       i <- members
@@ -66,20 +67,15 @@ object Cluster {
 
 trait Grappolo extends StrictLogging {
 
-  type Matrix = Map[Int, Map[Int, Similarity]]
+  def extractCluster(element: Index, matrix: Matrix, threshold: Similarity): Seq[Index]
 
-  def extractCluster(element: Int, matrix: Matrix, threshold: Similarity): Seq[Int]
-  def clusterQuality(cluster: Seq[Int], matrix: Matrix): Similarity
-  def clusterOrdering(left: (Seq[Int], Int, Similarity), right: (Seq[Int], Int, Similarity)): Boolean
+  def clusterQuality(cluster: Seq[Index], matrix: Matrix): Similarity
 
-  def toMatrix(map: Matrix) =
-    map
-      .mapValues(_.withDefaultValue(0d))
-      .withDefaultValue(Map().withDefaultValue(0d))
+  def clusterOrdering(left: (Seq[Index], Index, Similarity), right: (Seq[Index], Index, Similarity)): Boolean
 
   def cluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
 
-    def clusterSplit(matrix: Map[Int, Map[Int, Similarity]]) = {
+    def clusterSplit(matrix: Matrix) = {
       val singletons = matrix.
         mapValues(_.filter(_._2 >= threshold)).
         filter(_._2.size == 1).
@@ -111,19 +107,24 @@ trait Grappolo extends StrictLogging {
 
       val (nextSingletons, nextClusters) = clusterSplit(newMatrix)
 
-      def flatten(newClusters: Seq[Seq[Int]]) = newClusters.map(_.flatMap(clusters))
+      def flatten(newClusters: Seq[Seq[Index]]) = newClusters.map(_.flatMap(clusters))
 
       (singletons ++ flatten(nextSingletons), flatten(nextClusters))
     }.
-    dropWhile(_._2.nonEmpty).
-    head.
-    _1
+      dropWhile(_._2.nonEmpty).
+      head.
+      _1
   }
 
-  def doCluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Int]] = {
+  def toMatrix(map: Matrix) =
+    map
+      .mapValues(_.withDefaultValue(0d))
+      .withDefaultValue(Map().withDefaultValue(0d))
+
+  def doCluster(matrix: Matrix, threshold: Similarity): Seq[Seq[Index]] = {
     val elements = matrix.keySet.toSeq
 
-    def getCluster(element: Int) = {
+    def getCluster(element: Index) = {
       val cluster = extractCluster(element, matrix, threshold)
       assert(cluster.nonEmpty, s"Cluster empty for element $element")
       cluster
@@ -134,12 +135,12 @@ trait Grappolo extends StrictLogging {
       groupBy(c => c).
       mapValues(_.length).
       toSeq.
-      map { case(cluster, occurrences) => (cluster, occurrences, clusterQuality(cluster, matrix)) }.
+      map { case (cluster, occurrences) => (cluster, occurrences, clusterQuality(cluster, matrix)) }.
       sortWith(clusterOrdering).
       map(_._1)
 
-    val (clusters, clustered) = (candidateClusters  ++ elements.map(Seq(_)))
-      .foldLeft(Seq[Seq[Int]](), Set[Int]()) { (accum, candidateCluster) =>
+    val (clusters, clustered) = (candidateClusters ++ elements.map(Seq(_)))
+      .foldLeft(Seq[Seq[Index]](), Set[Index]()) { (accum, candidateCluster) =>
         val (clusters, clustered) = accum
 
         if (candidateCluster.exists(clustered.contains)) (clusters, clustered)
@@ -151,7 +152,7 @@ trait Grappolo extends StrictLogging {
 }
 
 object Matrix {
-  def apply(size: Int, threshold: Similarity)(scorer: (Int, Int) => Similarity): Matrix = {
+  def apply(size: Int, threshold: Similarity)(scorer: (Index, Index) => Similarity): Matrix = {
     val scores = for {
       i <- 0 until size
       j <- i + 1 until size
@@ -162,17 +163,7 @@ object Matrix {
     buildMatrix(size, scores)
   }
 
-  def apply(size: Int, pairs: Iterable[(Int, Int)], threshold: Similarity)(scorer: (Int, Int) => Similarity): Matrix = {
-    val scores = for {
-      (i, j) <- pairs
-      similarity = scorer(i, j)
-      if similarity >= threshold
-    } yield (i, j, similarity)
-
-    buildMatrix(size, scores)
-  }
-
-  def buildMatrix(size: Int, scores: Iterable[(Int, Int, Similarity)]) = {
+  def buildMatrix(size: Int, scores: Iterable[(Index, Index, Similarity)]) = {
     val allScores = scores ++ scores.map(t => (t._2, t._1, t._3)) ++ (0 until size).map(i => (i, i, 1d))
 
     val emptyVector = Map[Int, Similarity]().withDefaultValue(0d)
@@ -183,9 +174,19 @@ object Matrix {
       withDefaultValue(emptyVector)
   }
 
+  def apply(size: Int, pairs: Iterable[(Index, Index)], threshold: Similarity)(scorer: (Index, Index) => Similarity): Matrix = {
+    val scores = for {
+      (i, j) <- pairs
+      similarity = scorer(i, j)
+      if similarity >= threshold
+    } yield (i, j, similarity)
+
+    buildMatrix(size, scores)
+  }
+
   def save(matrix: Matrix, filename: String): Unit = {
     val out = new PrintWriter(new FileWriter(filename), true)
-    matrix.foreach { case(index, vector) =>
+    matrix.foreach { case (index, vector) =>
       out.println(vector.toSeq.sortBy(_._1).map(p => s"${p._1}/${p._2}").mkString(","))
     }
   }
@@ -194,7 +195,7 @@ object Matrix {
     Source.fromFile(filename).
       getLines().
       zipWithIndex.
-      map { case(line, index) =>
+      map { case (line, index) =>
         val inFields = line.split(",")
         val vector = inFields.
           map { field =>

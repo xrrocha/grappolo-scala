@@ -1,20 +1,21 @@
 package net.xrrocha.util
 
 object TimeUtils {
-  def time[A](action: => A): (A, Int) = {
-    val startTime = System.currentTimeMillis()
-    val result = action
-    val endTime = System.currentTimeMillis()
-    (result, (endTime - startTime).toInt)
-  }
   val timeParts = {
     val timeParts = Seq(("millisecond", 1), ("second", 1000), ("minute", 60), ("hour", 60), ("day", 24))
     val (_, triplets) = timeParts.foldLeft(1, Seq[(String, Int, Int)]()) { (accum, pair) =>
       val (accumFactor, triplets) = accum
       val (name, factor) = pair
-      (accumFactor * factor, triplets :+(name, factor, accumFactor * factor))
+      (accumFactor * factor, triplets :+ (name, factor, accumFactor * factor))
     }
     triplets.reverse
+  }
+
+  def time[A](action: => A): (A, Int) = {
+    val startTime = System.currentTimeMillis()
+    val result = action
+    val endTime = System.currentTimeMillis()
+    (result, (endTime - startTime).toInt)
   }
 
   def sayTimeInMillis(millis: Int) = {
